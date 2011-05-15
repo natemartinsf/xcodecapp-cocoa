@@ -41,6 +41,7 @@
     FSEventStreamRef        stream;
     NSString                *XCodeSupportProjectName;
     NSString                *XCodeTemplatePBXPath;
+    NSString                *ProfilePath;
     NSURL                   *XCodeSupportFolder;
     NSURL                   *XCodeSupportProject;
     NSURL                   *XCodeSupportProjectSources;

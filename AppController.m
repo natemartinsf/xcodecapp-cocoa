@@ -25,10 +25,10 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     AppController *ac = (AppController *)userData;
 	size_t i;
 	for(i = 0; i < numEvents; i++)
-    {
+        {
         [ac handleFileModification:[(NSArray *)eventPaths objectAtIndex:i] ignoreDate:NO];
 		[ac updateLastEventId:eventIds[i]];
-	}
+        }
 }
 
 
@@ -41,9 +41,9 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
 - (id)init
 {
     self = [super init];
-
+    
     if (self)
-    {
+        {
         [GrowlApplicationBridge setGrowlDelegate:@""];
         
         fm                  = [NSFileManager defaultManager];
@@ -51,8 +51,16 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
         modifiedXIBs        = [NSMutableArray new];
         ignoredFilePaths    = [NSMutableArray new];
         parserPath          = [[NSBundle mainBundle] pathForResource:@"parser" ofType:@"j"];
-    }
-
+        if([[NSFileManager defaultManager] fileExistsAtPath:[@"~/.bash_profile" stringByExpandingTildeInPath]])
+            {
+            ProfilePath = @"~/.bash_profile";
+            }
+        else if([[NSFileManager defaultManager] fileExistsAtPath:[@"~/.profile" stringByExpandingTildeInPath]])
+            {
+            ProfilePath = @"~/.profile";
+            }
+        }
+    
 	return self;
 }
 
@@ -75,10 +83,10 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     void                    *appPointer     = (void *)self;
     FSEventStreamContext    context         = {0, appPointer, NULL, NULL, NULL};
     NSTimeInterval          latency         = 3.0;
-
+    
 	stream = FSEventStreamCreate(NULL, &fsevents_callback, &context, (CFArrayRef) pathsToWatch,
 	                             [lastEventId unsignedLongLongValue], (CFAbsoluteTime) latency,kFSEventStreamCreateFlagUseCFTypes);
-
+    
 	FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
 	FSEventStreamStart(stream);
 }
@@ -86,11 +94,11 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
 - (void)stopEventStream
 {
     if (stream)
-    {
+        {
         FSEventStreamStop(stream);
         FSEventStreamInvalidate(stream);
         stream = nil;
-    }
+        }
 }
 
 - (void)registerDefaults
@@ -109,7 +117,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
 - (NSApplicationTerminateReply)applicationShouldTerminate: (NSApplication *)app
 {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-
+    
     [defaults setObject:lastEventId forKey:@"lastEventId"];
 	[defaults setObject:pathModificationDates forKey:@"pathModificationDates"];
 	[defaults synchronize];
@@ -145,25 +153,25 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
 {
     if ([self isPathMatchingIgnoredPaths:path])
         return;
-
+    
 	NSArray *contents = [fm contentsOfDirectoryAtPath:path error:NULL];
-
+    
 	for(NSString *node in contents)
-    {
+        {
         NSString        *fullPath       = [NSString stringWithFormat:@"%@/%@", path, node];
         NSDictionary    *fileAttributes = [fm attributesOfItemAtPath:fullPath error:NULL];
 		NSDate          *fileModDate    = [fileAttributes objectForKey:NSFileModificationDate];
-            
+        
         if(shouldIgnoreDate || [fileModDate compare:[self lastModificationDateForPath:path]] == NSOrderedDescending)
-        {
+            {
             if ([self isObjJFile:fullPath])
 				[modifiedSources addObject:fullPath];
             if ([self isXIBFile:fullPath])
-            {
-                NSLog(@"nib2cib %@", fullPath);
-                int ret = system([[NSString stringWithFormat:@"source ~/.bash_profile; nib2cib %@;", fullPath] UTF8String]);
-                if (ret == 0)
                 {
+                NSLog(@"nib2cib %@", fullPath);
+                int ret = system([[NSString stringWithFormat:@"source %@; nib2cib %@;", ProfilePath, fullPath] UTF8String]);
+                if (ret == 0)
+                    {
                     if (!shouldIgnoreDate)
                         [GrowlApplicationBridge notifyWithTitle:[fullPath lastPathComponent]
                                                     description:@"The XIB file has been converted"
@@ -172,21 +180,21 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
                                                        priority:0
                                                        isSticky:NO
                                                    clickContext:nil];
-
-                }
+                    
+                    }
                 else
                     NSLog(@"Error in conversion: return code is %d", ret);
-            }
+                }
             if ([self isObjJFile:fullPath])
-            {
+                {
                 NSString *shadowPath    = [[self shadowURLForSourceURL:[NSURL URLWithString:fullPath]] path];
-                NSString *command       = [NSString stringWithFormat:@"source ~/.bash_profile; objj %@ %@ %@;", parserPath, fullPath, shadowPath];
+                NSString *command       = [NSString stringWithFormat:@"source %@; objj %@ %@ %@;", ProfilePath, parserPath, fullPath, shadowPath];
                 
                 NSLog(@"%@", command);
                 
                 int ret = system([command UTF8String]);
                 if (ret == 0)
-                {
+                    {
                     if (!shouldIgnoreDate)
                         [GrowlApplicationBridge notifyWithTitle:[fullPath lastPathComponent]
                                                     description:@"The Objective-J file has been converted"
@@ -195,14 +203,14 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
                                                        priority:0
                                                        isSticky:NO
                                                    clickContext:nil];
-
-                }
+                    
+                    }
                 else
                     NSLog(@"Error in conversion: return code is %d", ret);
+                }
             }
         }
-	}
-
+    
 	[self updateLastModificationDateForPath:path];
 }
 
@@ -225,14 +233,14 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     XCodeSupportProjectSources = [NSURL URLWithString:@"Sources/" relativeToURL:XCodeSupportFolder];
     XCodeSupportPBXPath        = [NSString stringWithFormat:@"%@/project.pbxproj", [XCodeSupportProject path]];
     
-    //[fm removeItemAtURL:XCodeSupportFolder error:nil];
+        //[fm removeItemAtURL:XCodeSupportFolder error:nil];
     
-    // create the template project if it doesn't exist
+        // create the template project if it doesn't exist
     if (![fm fileExistsAtPath:[XCodeSupportFolder path]])
-    {
+        {
         NSLog(@"XCode support folder created at: %@", [XCodeSupportProject path]);
         [fm createDirectoryAtPath:[XCodeSupportProject path] withIntermediateDirectories:YES attributes:nil error:nil];
-    
+        
         NSLog(@"Copying project.pbxproj from %@ to %@", XCodeTemplatePBXPath, [XCodeSupportProject path]);
         [fm copyItemAtPath:XCodeTemplatePBXPath toPath:XCodeSupportPBXPath error:nil];
         
@@ -246,7 +254,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
                                     withString:[currentProjectURL path]
                                        options:NSCaseInsensitiveSearch 
                                          range:NSMakeRange(0, [PBXContent length])];
-
+        
         [PBXContent writeToFile:XCodeSupportPBXPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         NSLog(@"PBX file adapted to the project");
         
@@ -256,7 +264,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
         
         [NSThread detachNewThreadSelector:@selector(populateXCodeProject:)toTarget:self withObject:nil];
         return NO;
-    } 
+        } 
     return YES;
 }
 
@@ -288,7 +296,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
                                    priority:0
                                    isSticky:NO
                                clickContext:nil];
-
+    
 }
 
 - (NSURL*)shadowURLForSourceURL:(NSURL*)aSourceURL
@@ -311,10 +319,10 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     
     if (![fm fileExistsAtPath:ignorePath])
         return;
-
+    
     NSString *ignoreFileContent = [NSString stringWithContentsOfFile:ignorePath encoding:NSUTF8StringEncoding error:nil];
     ignoredFilePaths = [NSMutableArray arrayWithArray:[ignoreFileContent componentsSeparatedByString:@"\n"]];
-
+    
     NSLog(@"ignored file paths are: %@", ignoredFilePaths);
 }
 
@@ -323,34 +331,34 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     BOOL isMatching = NO;
     
     for (NSString *ignoredPath in ignoredFilePaths)
-    {   
-        if ([ignoredPath isEqual:@""])
-            continue;
-
-        NSMutableString *regexp = [NSMutableString stringWithFormat:@"%@/%@", [currentProjectURL path], ignoredPath];
-        [regexp replaceOccurrencesOfString:@"/" 
-                                     withString:@"\\/"
-                                        options:NSCaseInsensitiveSearch 
-                                          range:NSMakeRange(0, [regexp length])];
-        
-        [regexp replaceOccurrencesOfString:@"." 
-                                     withString:@"\\."
-                                        options:NSCaseInsensitiveSearch 
-                                          range:NSMakeRange(0, [regexp length])];
-        
-        [regexp replaceOccurrencesOfString:@"*" 
-                                withString:@".*"
-                                   options:NSCaseInsensitiveSearch 
-                                     range:NSMakeRange(0, [regexp length])];
-        
-        NSPredicate *regextest = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", regexp];
-        if ([regextest evaluateWithObject:aPath])
-        {
-            isMatching = YES;
-
-            break;
+        {   
+            if ([ignoredPath isEqual:@""])
+                continue;
+            
+            NSMutableString *regexp = [NSMutableString stringWithFormat:@"%@/%@", [currentProjectURL path], ignoredPath];
+            [regexp replaceOccurrencesOfString:@"/" 
+                                    withString:@"\\/"
+                                       options:NSCaseInsensitiveSearch 
+                                         range:NSMakeRange(0, [regexp length])];
+            
+            [regexp replaceOccurrencesOfString:@"." 
+                                    withString:@"\\."
+                                       options:NSCaseInsensitiveSearch 
+                                         range:NSMakeRange(0, [regexp length])];
+            
+            [regexp replaceOccurrencesOfString:@"*" 
+                                    withString:@".*"
+                                       options:NSCaseInsensitiveSearch 
+                                         range:NSMakeRange(0, [regexp length])];
+            
+            NSPredicate *regextest = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", regexp];
+            if ([regextest evaluateWithObject:aPath])
+                {
+                isMatching = YES;
+                
+                break;
+                }
         }
-    }
     
     return isMatching;
 }
@@ -373,7 +381,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     
     [spinner setHidden:NO];
     [spinner startAnimation:nil];
-
+    
     currentProjectURL = [[openPanel URLs] objectAtIndex:0];
     currentProjectName = [[[openPanel URLs] objectAtIndex:0] lastPathComponent];
     
@@ -387,13 +395,13 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
     [buttonStart setEnabled:NO];
     
     if (isProjectReady)
-    {
+        {
         [spinner setHidden:YES];
         [buttonStop setEnabled:YES];
         [buttonOpenXCode setEnabled:YES];
         [labelStatus setStringValue:@"XCodeCapp is running"];
-    }
-        
+        }
+    
     else
         [labelStatus setStringValue:@"XCodeCapp is loading project..."];
 }
@@ -427,7 +435,7 @@ void fsevents_callback(ConstFSEventStreamRef streamRef, void *userData, size_t n
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)theApplication hasVisibleWindows:(BOOL)flag
 {
     [mainWindow makeKeyAndOrderFront:nil];
-
+    
     return YES;
 }
 
